@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/docker/machine/libmachine/drivers/plugin"
-	"github.com/TWINGSISTER/docker-machine-driver-qemu-win/src/windriver"
+	"github.com/TWINGSISTER/docker-machine-driver-qemu-windows/src/windriver"
 )
 
 func main() {
