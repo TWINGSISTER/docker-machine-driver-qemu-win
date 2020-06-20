@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/docker/machine/libmachine/drivers/plugin"
-	"github.com/intel-iot-devkit/docker-machine-driver-qemu"
+	"github.com/TWINGSISTER/docker-machine-driver-qemu-win/src/windriver"
 )
 
 func main() {
