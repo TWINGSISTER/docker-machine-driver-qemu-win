@@ -2,13 +2,8 @@
 The Docker Machine plugin for QEMU enables the use of the QEMU hypervisor with Docker-Machine
 
 ## Requirements
-#### Linux
-* QEMU (qemu-system-x86_64 & qemu-img) in path -2.5.0+ Tested but other expected to work
-* KVM available
-
-#### Windows
+* Windows 10 64 Bit
 * QEMU 2.9.0+
-* [Intel HAXM driver](https://software.intel.com/en-us/android/articles/intel-hardware-accelerated-execution-manager)
 
 ## Install from Binary
 Please see the [release tab](https://github.com/intel-iot-devkit/docker-machine-driver-qemu/releases) and place the plugin in your PATH
