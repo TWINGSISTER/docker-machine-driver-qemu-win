@@ -46,21 +46,57 @@ type Driver struct {
 	DisplayType string
 	Nographic bool
 	VirtioDrives     bool
+	Attempts int
+	Tick time.Duration
+	Sleep time.Duration
 }
+//func simple(a func(a, b int) int) {  
+//    fmt.Println(a(60, 7))
+//}
 
-//DriverName name
+func Iterateconnect(connect func (tmout time.Duration)(net.Conn, error), attemptmsg string, attempts int ,sleep,timeout time.Duration) (net.Conn, error){
+	duration := timeout
+	tmout := duration
+	var conn net.Conn
+	var err error
+	for i := 0; i < attempts; i++ {
+		log.Debugf(attemptmsg,i)
+		conn, err = connect(tmout)
+		//conn, err := net.DialTimeout(network, address,tmout)
+		//defer conn.Close()
+		if err == nil {break}
+		tmout=tmout+duration
+		if sleep != 0 {time.Sleep(sleep)}
+	}	
+return conn, err
+}
+	//DriverName name
 func (d *Driver) DriverName() string {
 	return "qemu"
 }
-
 //GetCreateFlags Create flags
 func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 	return []mcnflag.Flag{
-			mcnflag.IntFlag{
+		mcnflag.IntFlag{
 			Name:   "qemu-memory",
 			EnvVar: "QEMU_MEMORY_SIZE",
 			Usage:  "Size of memory for host in MB",
 			Value:  1024,
+		},		
+		mcnflag.IntFlag{
+			Name:   "qemu-attempts",
+			Usage:  "Number of attempts to dial QEmu",
+			Value:  60,
+		},
+		mcnflag.IntFlag{
+			Name:   "qemu-tick",
+			Usage:  "Timeout and timeout increment in seconds in dialling QEmu",
+			Value:  1,
+		},
+				mcnflag.IntFlag{
+			Name:   "qemu-sleep",
+			Usage:  "Doing nothing between attempts in seconds when dialling QEmu",
+			Value:  1,
 		},
 		mcnflag.IntFlag{
 			Name:   "qemu-disk-size",
@@ -151,7 +187,7 @@ func (d *Driver) PreCreateCheck() error {
 	return nil
 }
 
-//Create the machiene
+//Create the machine
 func (d *Driver) Create() error {
 
 	//Copy ISO into machine directory
@@ -210,11 +246,34 @@ func (d *Driver) Create() error {
 
 // Kill  machine
 func (d *Driver) Kill() (err error) {
-	monconn, err := net.Dial("tcp", "127.0.0.1:"+strconv.Itoa(d.MonitorPort))
+	monconn, err :=Iterateconnect(
+		func (tmout time.Duration)(net.Conn, error){
+			monconn, err :=net.DialTimeout("tcp", "127.0.0.1:"+strconv.Itoa(d.MonitorPort),tmout)
+
+			return monconn, err
+		}, 
+		"Monitor connection attempt in kill %d",
+		d.Attempts,
+		d.Sleep, d.Tick)
+	//duration := time.Duration(Tick)
+	//tmout := duration
+	//for i := 0; i < Attempts; i++ {
+	//	log.Debugf("Monitor connection attempt in kill ",i)
+	//	monconn, err := net.DialTimeout("tcp", "127.0.0.1:"+strconv.Itoa(d.MonitorPort),tmout)
+		//sshconn, err := net.Dial("tcp", "127.0.0.1:"+strconv.Itoa(d.MonitorPort))
+	//	defer monconn.Close()
+	//	if err == nil {
+	//		break
+	//	}
+	//	tmout=tmout+duration
+	//}	
+	//monconn, err := net.Dial("tcp", "127.0.0.1:"+strconv.Itoa(d.MonitorPort))
 	if err != nil {
+		if monconn != nil {defer monconn.Close()}
 		return err
 	}
-	defer monconn.Close()
+	//if monconn != nil {defer monconn.Close()}//defer monconn.Close()
+	//defer monconn.Close()
 	w := bufio.NewWriter(monconn)
 	fmt.Fprint(w, "\nq\n")
 	w.Flush()
@@ -340,7 +399,6 @@ func (d *Driver) Start() error {
 	//if err != nil {
 	//	return err
 	//}
-
 	var netString string
 	netString = fmt.Sprintf("user,id=mynet0,net=192.168.76.0/24,dhcpstart=192.168.76.9,hostfwd=tcp:127.0.0.1:%d-:22,hostfwd=tcp:127.0.0.1:%d-:2376",
 		d.SSHPort,
@@ -348,7 +406,6 @@ func (d *Driver) Start() error {
 	for _, port := range d.OpenPorts {
 		netString = fmt.Sprintf("%s,hostfwd=tcp:127.0.0.1:%d-:%d", netString, port, port)
 	}
-
 	var monString string
 	monString = fmt.Sprintf("telnet:127.0.0.1:%d,server,nowait", d.MonitorPort)
 
@@ -359,7 +416,6 @@ func (d *Driver) Start() error {
 	if err != nil {
 		return nil
 	}
-	
 //		cmd := exec.Command(
 //		qemuCmd,
 //		"-netdev", netString,
@@ -450,40 +506,47 @@ func (d *Driver) Start() error {
 //		"-serial", fmt.Sprintf("file:%s", d.ResolveStorePath("kern.log")))
 	startCmd = append(startCmd,
 				"-serial", fmt.Sprintf("file:%s", d.ResolveStorePath("kern.log")))
-	log.Infof("Starting with command")
-	log.Infof(qemuCmd)
-	log.Infof(strings.Join(startCmd, " "))
-
+	//log.Infof("Starting with command")
+	log.Debugf("Starting VM %s", d.MachineName," with command ",qemuCmd," ",strings.Join(startCmd, " "))
+	//log.Infof(qemuCmd)
+	//log.Infof(strings.Join(startCmd, " "))
 	if stdout, stderr, err := cmdOutErr(qemuCmd, startCmd...); err != nil {
 		fmt.Printf("OUTPUT: %s\n", stdout)
 		fmt.Printf("ERROR: %s\n", stderr)
 		return err
 	}
 	log.Infof("Waiting for VM to start (ssh -p %d docker@localhost)...", d.SSHPort)
-
 	//log.Infof("Starting VM...")
 	//log.Infof(cmd.String())
 	//cmd.Start()
 	//log.Infof("Started")
 	d.IPAddress = "127.0.0.1"
 	d.SSHUser = "docker"
-	fmt.Println("XPress the Enter Key when you see the Linux Prompt")
-	fmt.Scanln() // wait for Enter Key
 	//Give Qemu a few changes to get started!
-	for i := 0; i < 50; i++ {
-			fmt.Println("Press again the Enter Key when you see the Linux Prompt")
-		    fmt.Scanln() // wait for Enter Key
-		time.Sleep(200 * time.Millisecond)
-		sshconn, err := net.Dial("tcp", "127.0.0.1:"+strconv.Itoa(d.SSHPort))
-		defer sshconn.Close()
-		if err == nil {
-			return nil
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
+	_, err = Iterateconnect(
+		func (tmout time.Duration)(net.Conn, error){
+			conn, err :=net.DialTimeout("tcp", "127.0.0.1:"+strconv.Itoa(d.SSHPort),tmout)
+			if conn != nil {defer conn.Close()}
+			return conn, err
+		}, 
+		"SSH connection attempt in start %d",
+		d.Attempts,
+		d.Sleep, d.Tick)	
+	//duration := time.Duration(Tick)
+	//tmout := duration
+	//for i := 0; i < Attempts; i++ {
+	//	log.Debugf("Attempt ",i)
+	//	sshconn, err := net.DialTimeout("tcp", "127.0.0.1:"+strconv.Itoa(d.SSHPort),tmout)
+		//sshconn, err := net.Dial("tcp", "127.0.0.1:"+strconv.Itoa(d.SSHPort))
+	//	defer sshconn.Close()
+	//	if err == nil {
+	//		return nil
+	//	}
+	//	time.Sleep(200 * time.Millisecond)
+	//}
+	if err == nil {return nil}
 	log.Infof("Starting takes too much! I give up")
 	return fmt.Errorf("Failed to startup QEMU")
-	
 }
 
 //Stop the machine
@@ -505,6 +568,9 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.DiskSize = flags.Int("qemu-disk-size")
 	d.Cpus = flags.Int("qemu-cpu-count")
 	d.Mem = flags.Int("qemu-memory")
+	d.Attempts = flags.Int("qemu-attempts")
+	d.Sleep = time.Second * time.Duration(flags.Int("qemu-sleep"))
+	d.Tick = time.Second * time.Duration(flags.Int("qemu-tick"))
 	d.Boot2DockerURL = flags.String("qemu-boot2docker-url")
 	d.Display =	flags.Bool("qemu-display")
 	d.DisplayType = flags.String("qemu-display-type")
