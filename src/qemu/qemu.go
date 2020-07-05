@@ -38,6 +38,7 @@ type Driver struct {
 	Cpus           int
 	Mem            int
 	QemuLocation   string
+	QemuProgram   string
 	EnginePort     int
 	OpenPorts      []int
 	Boot2DockerURL string
@@ -55,7 +56,7 @@ func (d *Driver) DriverName() string {
 //GetCreateFlags Create flags
 func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 	return []mcnflag.Flag{
-		mcnflag.IntFlag{
+			mcnflag.IntFlag{
 			Name:   "qemu-memory",
 			EnvVar: "QEMU_MEMORY_SIZE",
 			Usage:  "Size of memory for host in MB",
@@ -82,10 +83,16 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Name:   "qemu-location",
 			Usage:  "The location of the qemu tools if not in Path",
 		},
+		mcnflag.StringFlag{
+			Name:  "qemu-program",
+			Usage: "The name of the qemu emulator",
+			Value:  "qemu-system-x86_64.exe",
+		},
 		mcnflag.StringSliceFlag{
 			Name:  "qemu-open-ports",
 			Usage: "Make the specified port number accessible from the host",
 		},
+
 		mcnflag.BoolFlag{
 			Name:  "qemu-display",
 			Usage: "Display video output",
@@ -460,20 +467,19 @@ func (d *Driver) Start() error {
 	//log.Infof("Started")
 	d.IPAddress = "127.0.0.1"
 	d.SSHUser = "docker"
-	fmt.Println("Press the Enter Key when you see the Linux Prompt")
+	fmt.Println("XPress the Enter Key when you see the Linux Prompt")
 	fmt.Scanln() // wait for Enter Key
 	//Give Qemu a few changes to get started!
 	for i := 0; i < 50; i++ {
-		if i==49  {
-			fmt.Println("Press the Enter Key when you see the Linux Prompt")
+			fmt.Println("Press again the Enter Key when you see the Linux Prompt")
 		    fmt.Scanln() // wait for Enter Key
-			}
 		time.Sleep(200 * time.Millisecond)
 		sshconn, err := net.Dial("tcp", "127.0.0.1:"+strconv.Itoa(d.SSHPort))
 		defer sshconn.Close()
 		if err == nil {
 			return nil
 		}
+		time.Sleep(200 * time.Millisecond)
 	}
 	log.Infof("Starting takes too much! I give up")
 	return fmt.Errorf("Failed to startup QEMU")
@@ -494,6 +500,7 @@ func (d *Driver) Stop() error {
 //SetConfigFromFlags Set the config from the flags
 func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.QemuLocation = flags.String("qemu-location")
+	d.QemuProgram = flags.String("qemu-program")
 	d.MonitorPort = flags.Int("qemu-monitor-port")
 	d.DiskSize = flags.Int("qemu-disk-size")
 	d.Cpus = flags.Int("qemu-cpu-count")
