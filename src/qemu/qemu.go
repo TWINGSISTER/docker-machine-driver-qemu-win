@@ -192,7 +192,9 @@ func (d *Driver) Create() error {
 
 	//Copy ISO into machine directory
 	b2dutils := mcnutils.NewB2dUtils(d.StorePath)
-	if err := b2dutils.CopyIsoToMachineDir("", d.GetMachineName()); err != nil {
+	// was CopyIsoToMachineDir("", d.GetMachineName()) seems that a non 
+	// standard ISO never gets into...
+	if err := b2dutils.CopyIsoToMachineDir(d.Boot2DockerURL, d.GetMachineName()); err != nil {
 		return err
 	}
 	log.Infof("Creating SSH key...")
